@@ -26,6 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
+	"github.com/ethereum/go-ethereum/beacon/params"
+	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"	
+	"github.com/ethereum/go-ethereum/beacon/params"
+	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 
 var (
 	testGenesis  = newTestGenesis()
@@ -78,7 +86,31 @@ func TestCommitteeChainFixedCommitteeRoots(t *testing.T) {
 		c.verifyRange(tcBase, 3, 6)
 	}
 }
-
+func TestCommitteeChainFixedCommitteeRoots(t *testing.T) {
+	for _, reload := range []bool{false, true} {
+		c := newCommitteeChainTest(t, tfBase, 300, true)
+		c.setClockPeriod(7)
+		c.addFixedCommitteeRoot(tcBase, 4, nil)
+		c.addFixedCommitteeRoot(tcBase, 5, nil)
+		c.addFixedCommitteeRoot(tcBase, 6, nil)
+		c.addFixedCommitteeRoot(tcBase, 8, ErrInvalidPeriod) // range has to be continuous
+		c.addFixedCommitteeRoot(tcBase, 3, nil)
+		c.addFixedCommitteeRoot(tcBase, 2, nil)
+		if reload {
+			c.reloadChain()
+		}
+		c.addCommittee(tcBase, 4, nil)
+		c.addCommittee(tcBase, 6, ErrInvalidPeriod) // range has to be continuous
+		c.addCommittee(tcBase, 5, nil)
+		c.addCommittee(tcBase, 6, nil)
+		c.addCommittee(tcAnotherGenesis, 3, ErrWrongCommitteeRoot)
+		c.addCommittee(tcBase, 3, nil)
+		if reload {
+			c.reloadChain()
+		}
+		c.verifyRange(tcBase, 3, 6)
+	}
+}
 func TestCommitteeChainCheckpointSync(t *testing.T) {
 	for _, enforceTime := range []bool{false, true} {
 		for _, reload := range []bool{false, true} {
@@ -279,7 +311,15 @@ func (c *committeeChainTest) insertUpdate(tc *testCommitteeChain, period uint64,
 		c.t.Errorf("Incorrect error output from InsertUpdate at period %d (expected %v, got %v)", period, expErr, err)
 	}
 }
-
+type committeeChainTest struct {
+	t               *testing.T
+	db              *memorydb.Database
+	clock           *mclock.Simulated
+	config          types.ChainConfig
+	signerThreshold int
+	enforceTime     bool
+	chain           *CommitteeChain
+}
 func (c *committeeChainTest) verifySignedHeader(tc *testCommitteeChain, period float64, expOk bool) {
 	slot := uint64(period * float64(params.SyncPeriodLength))
 	signedHead := GenerateTestSignedHeader(types.Header{Slot: slot}, &tc.config, tc.periods[types.SyncPeriod(slot)].committee, slot+1, 400)
